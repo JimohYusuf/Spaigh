@@ -1,0 +1,438 @@
+package com.example.spaigh
+
+import android.app.Notification
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.net.ConnectivityManager
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.widget.Toast
+import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
+import com.android.volley.AuthFailureError
+import com.android.volley.DefaultRetryPolicy
+import com.android.volley.Request
+import com.android.volley.Response
+import com.android.volley.toolbox.StringRequest
+import com.example.spaigh.App.Companion.CHANNEL_ID
+import com.example.spaigh.database.AppDatabase
+import com.example.spaigh.database.Data
+import com.example.spaigh.database.DataDao
+import com.example.spaigh.network.DbConstants
+import com.example.spaigh.network.VolleySingleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.json.JSONException
+import org.json.JSONObject
+import java.math.RoundingMode
+import java.text.DateFormat
+import java.text.DecimalFormat
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlin.collections.HashMap
+import kotlin.math.abs
+
+//all possible device/call states
+val stateTypes: List<String> = listOf("CALL-IDLE", "DEVICE-IDLE", "OFF-HOOK", "RINGING", "DEVICE-MOVING", "CALL-ACTIVE", "OUTGOING-CALL")
+
+class SpaighService() : Service(), SensorEventListener {
+    private lateinit var sensorManager: SensorManager
+    private lateinit var manager: PackageManager
+
+    //parameter controls sensitivity of app to phone movement
+    private val moveThreshold: Float = 0.005F
+
+    //acquire gravity and linear acceleration sensors
+    private var sGrav: Sensor? = null
+    private var sLinAccel: Sensor? = null
+
+    //array for storing sensor data
+    private var gravData = FloatArray(3) { 0f }
+    private var linAccelData = FloatArray(3) { 0f }
+
+    //array for storing most recent sensor data
+    private var gravDataTemp = FloatArray(3) { 0f }
+    private var linAccelDataTemp = FloatArray(3) { 0f }
+
+    //array for storing difference between current and most recent sensor data
+    private var gravDataDelta = FloatArray(3) { 0f }
+    private var linAccelDataDelta = FloatArray(3) { 0f }
+
+    //determine if sensor data should be printed to console
+    private var canPrint: Boolean = false
+
+    //cartesian coordinates
+    private val axis = mapOf(0 to "X", 1 to "Y", 2 to "Z")
+
+    //record changes in sensor state
+    private var gravChanged: Boolean = false
+    private var linAccelChanged: Boolean = false
+
+    //coroutine scope for background threads
+    private val myScope = CoroutineScope(Dispatchers.IO)
+
+    //combining sensor data to record device motion
+    private var moveState = stateTypes[1]
+    private var moveStatePrev = stateTypes[1]
+
+    //handle to database
+    private lateinit var dataControl: DataDao
+
+    //used to implement delay before device motion state goes idle
+    private var intervalStart: Long = 0L
+    private var intervalStop: Long = 0L
+
+    //local time-stamp
+    private var localTime: String = ""
+
+    //allow running of block of code periodically (defined by delay)
+    private val handler = Handler()
+    private val delay = 100 //milliseconds
+
+    //wait time of no active motion before device goes to idle mode
+    private val waitTime = 10000
+
+    //time interval for cleaning up local database (daily)
+    private val dayInSeconds = 86400000L
+
+    //parameters controlling cleaning of local database
+    private var syncSuccess = true
+    private var dbCleaned = false
+
+    private lateinit var jsonObject: JSONObject
+
+
+    override fun onCreate() {
+        super.onCreate()
+
+        manager = packageManager
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+
+        //acquire specific sensor objects
+        sLinAccel = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        sGrav = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+
+        //register sensor listeners
+        sGrav?.also { Grav ->
+            sensorManager.registerListener(this, Grav, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        sLinAccel?.also { LinAccel ->
+            sensorManager.registerListener(this, LinAccel, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+
+        //initialize handle to database
+        dataControl = AppDatabase.getDatabase(application, myScope).dataDao()
+
+        //Code to run every X seconds
+        handler.postDelayed(object : Runnable {
+            @RequiresApi(Build.VERSION_CODES.M)
+            override fun run() {
+
+
+                    //sync data in case of lost connections
+                    myScope.launch {
+                        val allData = dataControl.getAll()
+                        for (data in allData) {
+                            if (data.syncStatus == DbConstants.SYNC_FAILED) {
+                                reSyncWithServer(data.timeStamp, data.phnState.toString(), data.callState.toString())
+                            }
+                        }
+                    }
+
+
+                intervalStop = System.currentTimeMillis()
+                localTime = getLocalTime()
+
+                //Check For Device Motion
+                if (gravChanged && linAccelChanged){
+                    moveState = stateTypes[4]
+                    intervalStart = System.currentTimeMillis()
+                }
+                if( moveState == stateTypes[4] && (intervalStop - intervalStart) >= waitTime){
+                    if(!gravChanged && !linAccelChanged){
+                        moveState = stateTypes[1]
+                    }
+                }
+
+                // Finite State Machine For Call States
+                if (callstatePrev == stateTypes[0] && callstate == stateTypes[2]){
+                    callStateToDb = stateTypes[6]
+                }
+                else if(callstatePrev == stateTypes[3] && callstate == stateTypes[2]){
+                    callStateToDb = stateTypes[5]
+                }
+                else{
+                    callStateToDb = callstate
+                }
+
+
+                //Check For Change In Device/Call Data And Write To Database
+                if( moveState != moveStatePrev || callstate != callstatePrev)
+                {
+                    syncWithServer(localTime, moveState, callStateToDb)
+                    moveStatePrev = moveState
+                    callstatePrev = callstate
+                }
+
+                if (!dbCleaned && syncSuccess && (System.currentTimeMillis() % dayInSeconds < 1000) ){
+                    myScope.launch {
+                        dataControl.deleteAllData()
+                    }
+                    dbCleaned = true
+                }
+                else{
+                    dbCleaned = false
+                }
+
+                handler.postDelayed(this, delay.toLong())
+            }
+        }, delay.toLong())
+
+
+    }
+
+
+
+    override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
+
+
+
+    override fun onSensorChanged(event: SensorEvent) {
+        if (event.sensor.type == Sensor.TYPE_GRAVITY) {
+            for ((counter, value) in event.values.withIndex()) {
+                gravData[counter] = value
+            }
+            for ((counter, value) in gravData.withIndex()){
+                gravDataDelta[counter] = abs(gravData[counter] - gravDataTemp[counter])
+            }
+            for ((count, value) in gravData.withIndex()){
+                gravDataTemp[count] = gravData[count]
+            }
+        }
+        if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION) {
+            for ((counter, value) in event.values.withIndex()) {
+                linAccelData[counter] = value
+            }
+            for ((counter, value) in linAccelData.withIndex()){
+                linAccelDataDelta[counter] = abs(linAccelData[counter] - linAccelDataTemp[counter])
+            }
+            for ((count, value) in linAccelData.withIndex()){
+                linAccelDataTemp[count] = linAccelData[count]
+            }
+        }
+
+        //check for motion
+        gravChanged = (abs(gravDataDelta[0]) > moveThreshold || abs(gravDataDelta[1]) > moveThreshold || abs(gravDataDelta[2]) > moveThreshold)
+        linAccelChanged =  (abs(linAccelDataDelta[0]) > moveThreshold || abs(linAccelDataDelta[1]) > moveThreshold || abs(linAccelDataDelta[2]) > moveThreshold)
+
+    }
+
+
+
+    override fun onBind(intent: Intent?): IBinder? { return null }
+
+
+
+    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
+        //acquire server address from user input
+       // DbConstants().SERVER_URL = R.id.server_address.toString()
+
+        //println(DbConstants().SERVER_URL)
+
+        Toast.makeText(this, "starting", Toast.LENGTH_LONG).show()
+
+        //Foreground service notification build
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0, notificationIntent, 0
+        )
+        val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Spaigh Service")
+            .setContentText("spying")
+            .setSmallIcon(R.drawable.ic_fan)
+            .setContentIntent(pendingIntent)
+            .build()
+        startForeground(1, notification)
+
+
+        return START_NOT_STICKY
+    }
+
+
+    //does what it says
+    private fun getLocalTime(): String {
+        val currTime = Calendar.getInstance(TimeZone.getTimeZone("GMT+4:00")).time
+        val date: DateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US)
+        date.timeZone = TimeZone.getTimeZone("GMT+4:00")
+        return date.format(currTime)
+    }
+
+
+
+    //this function checks whether the device is on a network
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun isNetworkAvailable(): Boolean{
+        val connManager = this.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networkInfo= connManager.activeNetworkInfo
+        return networkInfo?.isConnected() == true
+    }
+
+
+
+    //this function syncs the device's database data to server
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun syncWithServer(localTime: String, devState: String, callStateL: String){
+        if (isNetworkAvailable()){
+
+            // Formulate POST request and handle response.
+            var stringRequest = object: StringRequest(
+                Request.Method.POST, DbConstants.SERVER_URL,
+                Response.Listener { response ->
+                    try {
+                        jsonObject = JSONObject(response)
+                        var Response = jsonObject.getString("response")
+
+                        if (Response == "OK"){
+                            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SYNC_SUCCESS)
+                        }
+                        else{
+                            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SYNC_FAILED)
+                        }
+                        println(Response)
+                    } catch (e: JSONException){
+                        e.printStackTrace()
+                    }
+                },
+                Response.ErrorListener { error ->
+                    // Handle error
+                    syncToLocalSQLite(localTime,devState,callStateL)
+                }){
+
+                @Throws(AuthFailureError::class)
+                override fun getParams(): Map<String, String> {
+                    val params: MutableMap<String, String> = HashMap()
+                    //Change with your post params
+                    params["time_stamp"] = localTime
+                    params["device_state"] = devState
+                    params["call_state"] = callStateL
+                    return params
+                }
+                }
+
+            stringRequest.retryPolicy = DefaultRetryPolicy(
+                2000,
+                DefaultRetryPolicy.DEFAULT_MAX_RETRIES,
+                DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
+            )
+
+            // Add the request to the RequestQueue.
+            VolleySingleton.getInstance(this).addToRequestQueue(stringRequest)
+
+        } else{
+            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SYNC_FAILED)
+        }
+
+    }
+
+
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun reSyncWithServer(localTime: String, devState: String, callStateL: String){
+        if (isNetworkAvailable()){
+
+            // Formulate POST request and handle response.
+            var stringRequest = object: StringRequest(
+                Request.Method.POST, DbConstants.SERVER_URL,
+                Response.Listener { response ->
+                    try {
+                        jsonObject = JSONObject(response)
+                        var Response = jsonObject.getString("response")
+
+                        if (Response == "OK"){
+                            updateLocalSQLite(localTime,devState,callStateL,DbConstants.SYNC_SUCCESS)
+                        }
+                    } catch (e: JSONException){
+                        e.printStackTrace()
+                    }
+                },
+                Response.ErrorListener {
+                    //do nothing
+                }){
+
+                @Throws(AuthFailureError::class)
+                override fun getParams(): Map<String, String> {
+                    val params: MutableMap<String, String> = HashMap()
+                    //Change with your post params
+                    params["time_stamp"] = localTime
+                    params["device_state"] = devState
+                    params["call_state"] = callStateL
+                    return params
+                }
+            }
+
+            stringRequest.retryPolicy = DefaultRetryPolicy(
+                2000,
+                DefaultRetryPolicy.DEFAULT_MAX_RETRIES,
+                DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
+            )
+
+            // Add the request to the RequestQueue.
+            VolleySingleton.getInstance(this).addToRequestQueue(stringRequest)
+
+        }
+    }
+
+
+
+    private fun syncToLocalSQLite(localTime: String, devState: String, callStateL: String,
+                                  syncStatus: Int = DbConstants.SYNC_FAILED){
+        myScope.launch {
+            dataControl.insert(Data(localTime,devState,callStateL,syncStatus))
+        }
+    }
+
+
+    private fun updateLocalSQLite(localTime: String, devState: String, callStateL: String,
+                                  syncStatus: Int){
+        myScope.launch {
+            dataControl.update(Data(localTime,devState,callStateL,syncStatus))
+        }
+    }
+
+
+    private fun printData (sensorData: FloatArray) {
+        var temp: Float = 0.0F
+        val df = DecimalFormat("#.###")
+        df.roundingMode = RoundingMode.CEILING
+
+        canPrint =
+            !(abs(sensorData[0]) < moveThreshold && abs(sensorData[1]) < moveThreshold && abs(sensorData[2]) < moveThreshold)
+
+        if (canPrint) {
+            for ((counter, value) in sensorData.withIndex()) {
+                if(abs(value) > moveThreshold) {
+                    temp = df.format(value).toFloat()
+                    print("Axis ${axis[counter]} = $temp")
+                }
+                else{ print("Axis ${axis[counter]} = 0 ") }
+            }
+            println()
+        }
+    }
+
+
+    override fun onDestroy() {
+        super.onDestroy()
+    }
+}
