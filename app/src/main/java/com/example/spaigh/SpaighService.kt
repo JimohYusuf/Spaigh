@@ -49,7 +49,7 @@ class SpaighService() : Service(), SensorEventListener {
     private lateinit var manager: PackageManager
 
     //parameter controls sensitivity of app to phone movement
-    private val moveThreshold: Float = 0.005F
+    private val moveThreshold: Float = 0.01F
 
     //acquire gravity and linear acceleration sensors
     private var sGrav: Sensor? = null
@@ -96,7 +96,7 @@ class SpaighService() : Service(), SensorEventListener {
 
     //allow running of block of code periodically (defined by delay)
     private val handler = Handler()
-    private val delay = 100 //milliseconds
+    private val delay = 200 //milliseconds
 
     //wait time of no active motion before device goes to idle mode
     private val waitTime = 10000
@@ -141,14 +141,19 @@ class SpaighService() : Service(), SensorEventListener {
 
                     //sync data in case of lost connections
                     myScope.launch {
-                        val allData = dataControl.getAll()
-                        for (data in allData) {
-                            if (data.syncStatus == DbConstants.SYNC_FAILED) {
-                                reSyncWithServer(data.timeStamp, data.phnState.toString(), data.callState.toString())
+                        if (isNetworkAvailable()) {
+                            val allData = dataControl.getAll()
+                            for (data in allData) {
+                                if (data.syncStatus == DbConstants.SYNC_FAILED) {
+                                    reSyncWithServer(
+                                        data.timeStamp,
+                                        data.phnState.toString(),
+                                        data.callState.toString()
+                                    )
+                                }
                             }
                         }
                     }
-
 
                 intervalStop = System.currentTimeMillis()
                 localTime = getLocalTime()
@@ -382,7 +387,7 @@ class SpaighService() : Service(), SensorEventListener {
             }
 
             stringRequest.retryPolicy = DefaultRetryPolicy(
-                2000,
+                1000,
                 DefaultRetryPolicy.DEFAULT_MAX_RETRIES,
                 DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
             )
