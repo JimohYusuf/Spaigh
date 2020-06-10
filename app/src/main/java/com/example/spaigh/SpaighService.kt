@@ -249,12 +249,8 @@ class SpaighService() : Service(), SensorEventListener {
 
 
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
-        //acquire server address from user input
-       // DbConstants().SERVER_URL = R.id.server_address.toString()
 
-        //println(DbConstants().SERVER_URL)
-
-        Toast.makeText(this, "starting", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "service started", Toast.LENGTH_LONG).show()
 
         //Foreground service notification build
         val notificationIntent = Intent(this, MainActivity::class.java)
@@ -417,7 +413,7 @@ class SpaighService() : Service(), SensorEventListener {
 
 
     private fun printData (sensorData: FloatArray) {
-        var temp: Float = 0.0F
+        var temp = 0.0F
         val df = DecimalFormat("#.###")
         df.roundingMode = RoundingMode.CEILING
 
