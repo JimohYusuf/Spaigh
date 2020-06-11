@@ -44,6 +44,10 @@ import kotlin.math.abs
 //all possible device/call states
 val stateTypes: List<String> = listOf("CALL-IDLE", "DEVICE-IDLE", "OFF-HOOK", "RINGING", "DEVICE-MOVING", "CALL-ACTIVE", "OUTGOING-CALL")
 
+var moveState = stateTypes[1]
+var isConnected = "Internet: Not Connected"
+var isSynced = "Syncing data"
+
 class SpaighService() : Service(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private lateinit var manager: PackageManager
@@ -81,7 +85,6 @@ class SpaighService() : Service(), SensorEventListener {
     private val myScope = CoroutineScope(Dispatchers.IO)
 
     //combining sensor data to record device motion
-    private var moveState = stateTypes[1]
     private var moveStatePrev = stateTypes[1]
 
     //handle to database
@@ -99,7 +102,7 @@ class SpaighService() : Service(), SensorEventListener {
     private val delay = 200 //milliseconds
 
     //wait time of no active motion before device goes to idle mode
-    private val waitTime = 10000
+    private val waitTime = 3000
 
     //time interval for cleaning up local database (daily)
     private val dayInSeconds = 86400000L
@@ -109,6 +112,8 @@ class SpaighService() : Service(), SensorEventListener {
     private var dbCleaned = false
 
     private lateinit var jsonObject: JSONObject
+
+    var syncCheck = 0
 
 
     override fun onCreate() {
@@ -142,9 +147,11 @@ class SpaighService() : Service(), SensorEventListener {
                     //sync data in case of lost connections
                     myScope.launch {
                         if (isNetworkAvailable()) {
+                            isConnected = "Internet: Connected"
                             val allData = dataControl.getAll()
                             for (data in allData) {
                                 if (data.syncStatus == DbConstants.SYNC_FAILED) {
+                                    syncCheck += 1
                                     reSyncWithServer(
                                         data.timeStamp,
                                         data.phnState.toString(),
@@ -152,6 +159,17 @@ class SpaighService() : Service(), SensorEventListener {
                                     )
                                 }
                             }
+
+                            if (syncCheck != 0){
+                                isSynced = "Syncing data"
+                                syncCheck = 0
+                            }
+                            else{
+                                isSynced = "Synced all data"
+                            }
+                        } else{
+                            isConnected = "Internet: Not Connected"
+                            isSynced = "Syncing data"
                         }
                     }
 

@@ -9,6 +9,15 @@
     android:padding="16dp"
     tools:context=".MainActivity">
 
+    <TextView
+        android:id="@+id/service_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:text="" />
+
+
+
     <EditText
         android:id="@+id/server_address"
         android:layout_width="match_parent"
@@ -27,5 +36,31 @@
         android:layout_height="wrap_content"
         android:onClick="stopService"
         android:text="@string/stop_service" />
+
+    <TextView
+        android:id="@+id/device_state"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:textSize="18sp"
+        android:text="" />
+    <TextView
+        android:id="@+id/call_state"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:textSize="18sp"
+        android:text="" />
+    <TextView
+        android:id="@+id/connection"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:textSize="18sp"
+        android:text="" />
+    <TextView
+        android:id="@+id/sync_state"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:textSize="18sp"
+        android:text="" />
+
 
 </LinearLayout>
