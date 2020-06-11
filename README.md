@@ -63,7 +63,7 @@ And that's it for the database!
 ---
 ## Server side scripting using PHP
 ---
-Create a PHP script in your `www/var/spaigh` folder. Note that `spaigh` is only necessary if you created a
+Create a PHP script in your `/var/www/spaigh` folder. Note that `spaigh` is only necessary if you created a
 separate folder different from the default while setting up your server.
 
 Name the PHP script `spaigh_data.php`
