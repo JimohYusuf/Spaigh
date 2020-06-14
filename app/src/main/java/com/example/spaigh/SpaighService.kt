@@ -45,8 +45,9 @@ import kotlin.math.abs
 val stateTypes: List<String> = listOf("CALL-IDLE", "DEVICE-IDLE", "OFF-HOOK", "RINGING", "DEVICE-MOVING", "CALL-ACTIVE", "OUTGOING-CALL")
 
 var moveState = stateTypes[1]
-var isConnected = "Internet: Not Connected"
-var isSynced = "Syncing data"
+var isConnected = "Internet: Unknown"
+var isSynced = "Not Syncing"
+var serviceRunning = false
 
 class SpaighService() : Service(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
@@ -102,10 +103,10 @@ class SpaighService() : Service(), SensorEventListener {
     private val delay = 200 //milliseconds
 
     //wait time of no active motion before device goes to idle mode
-    private val waitTime = 3000
+    private val waitTime = 2000
 
     //time interval for cleaning up local database (daily)
-    private val dayInSeconds = 86400000L
+    private val dayInSeconds = 86400000L //in milliseconds
 
     //parameters controlling cleaning of local database
     private var syncSuccess = true
@@ -118,6 +119,8 @@ class SpaighService() : Service(), SensorEventListener {
 
     override fun onCreate() {
         super.onCreate()
+
+        serviceRunning = true
 
         manager = packageManager
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -289,7 +292,7 @@ class SpaighService() : Service(), SensorEventListener {
     }
 
 
-    //does what it says
+    //does exactly what it says
     private fun getLocalTime(): String {
         val currTime = Calendar.getInstance(TimeZone.getTimeZone("GMT+4:00")).time
         val date: DateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US)
@@ -453,5 +456,14 @@ class SpaighService() : Service(), SensorEventListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        //Return to default states on stop service
+        callStateToDb = "CALL-IDLE"
+        moveState = "DEVICE-IDLE"
+        isConnected = "Internet: Unknown"
+        isSynced = "Not Syncing"
+        serverConnection = "Disconnected from " + DbConstants.SERVER_URL
+        serviceRunning = false
+        sensorManager.unregisterListener(this)
+        handler.removeCallbacksAndMessages(null)
     }
 }

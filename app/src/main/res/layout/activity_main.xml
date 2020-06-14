@@ -14,7 +14,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="14sp"
-        android:text="" />
+        android:text=" Service Not Running" />
 
 
 
@@ -22,9 +22,10 @@
         android:id="@+id/server_address"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/server_addr"
+        android:hint=""
         android:autofillHints=""
-        android:inputType= "text" />
+        android:inputType= "text"
+        android:textSize="14sp"/>
 
     <Button
         android:layout_width="match_parent"

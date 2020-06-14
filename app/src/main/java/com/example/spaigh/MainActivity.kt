@@ -15,16 +15,22 @@ import androidx.core.content.ContextCompat
 import com.example.spaigh.network.DbConstants
 import kotlinx.android.synthetic.main.activity_main.*
 
+var serverConnection = "server address"
 
 class MainActivity : AppCompatActivity() {
     private val handler = Handler()
-    private val delay = 10L
-    private var serviceStarted = "Service not Running"
+    private val delay = 100L
 
     @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        server_address.setHint(DbConstants.SERVER_URL)
+
+        if (serviceRunning){
+            service_state.setText(" Service is Running")
+        }
 
         call_state.setTextColor(Color.BLUE)
         device_state.setTextColor(Color.BLUE)
@@ -62,6 +68,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 else{sync_state.setTextColor(Color.BLUE)}
 
+                if (isConnected != "Internet: Connected"){
+                    server_address.hint = serverConnection
+                }
+
+                if(isConnected == "Internet: Connected" && serviceRunning){
+                    server_address.setHint("Connected to " + DbConstants.SERVER_URL)
+                }
+
                 handler.postDelayed(this, delay)
             }
         }, delay)
@@ -76,7 +90,9 @@ class MainActivity : AppCompatActivity() {
         //Send an intent to start service
         val serviceIntent = Intent(this, SpaighService::class.java)
         ContextCompat.startForegroundService(this, serviceIntent)
-        service_state.setText("Service is Running")
+        service_state.setText(" Service is Running")
+        server_address.setText("")
+        server_address.hint = "Connected to " + DbConstants.SERVER_URL
     }
 
 
@@ -84,7 +100,7 @@ class MainActivity : AppCompatActivity() {
     fun stopService(v: View?) {
         val serviceIntent = Intent(this, SpaighService::class.java)
         stopService(serviceIntent)
-        service_state.setText("Service not Running")
+        service_state.setText(" Service Stopped")
     }
 
 
@@ -132,6 +148,7 @@ class MainActivity : AppCompatActivity() {
 
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 }
