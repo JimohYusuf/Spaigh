@@ -125,10 +125,18 @@ class SpaighService() : Service(), SensorEventListener {
         manager = packageManager
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
-
         //acquire specific sensor objects
-        sLinAccel = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
-        sGrav = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+        if (sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY) != null) {
+            sGrav = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+        } else {
+            Toast.makeText(this, "No gravity sensor found", Toast.LENGTH_LONG).show()
+        }
+
+        if (sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) != null) {
+            sLinAccel = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        } else {
+            Toast.makeText(this, "No linear acceleration sensor found", Toast.LENGTH_LONG).show()
+        }
 
         //register sensor listeners
         sGrav?.also { Grav ->
