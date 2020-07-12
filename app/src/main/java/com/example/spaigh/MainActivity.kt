@@ -127,7 +127,7 @@ class MainActivity : AppCompatActivity() {
                             grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
                     //do nothing
                 } else {
-                   Toast.makeText(this, "Call-state function disabled", Toast.LENGTH_LONG).show()
+                   Toast.makeText(this, "Phone monitoring function disabled", Toast.LENGTH_LONG).show()
                 }
                 return
             }

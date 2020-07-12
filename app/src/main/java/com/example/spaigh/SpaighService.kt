@@ -129,7 +129,7 @@ class SpaighService() : Service(), SensorEventListener {
         if (sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY) != null) {
             sGrav = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
         } else {
-            Toast.makeText(this, "No gravity sensor found", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "No gravity sensor found. Motion detection disabled", Toast.LENGTH_LONG).show()
         }
 
         if (sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) != null) {
@@ -161,7 +161,7 @@ class SpaighService() : Service(), SensorEventListener {
                             isConnected = "Internet: Connected"
                             val allData = dataControl.getAll()
                             for (data in allData) {
-                                if (data.syncStatus == DbConstants.SYNC_FAILED) {
+                                if (data.syncStatus == DbConstants.UNSENT) {
                                     syncCheck += 1
                                     reSyncWithServer(
                                         data.timeStamp,
@@ -334,10 +334,10 @@ class SpaighService() : Service(), SensorEventListener {
                         var Response = jsonObject.getString("response")
 
                         if (Response == "OK"){
-                            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SYNC_SUCCESS)
+                            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SENT)
                         }
                         else{
-                            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SYNC_FAILED)
+                            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.UNSENT)
                         }
                         println(Response)
                     } catch (e: JSONException){
@@ -370,7 +370,7 @@ class SpaighService() : Service(), SensorEventListener {
             VolleySingleton.getInstance(this).addToRequestQueue(stringRequest)
 
         } else{
-            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SYNC_FAILED)
+            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.UNSENT)
         }
 
     }
@@ -390,7 +390,7 @@ class SpaighService() : Service(), SensorEventListener {
                         var Response = jsonObject.getString("response")
 
                         if (Response == "OK"){
-                            updateLocalSQLite(localTime,devState,callStateL,DbConstants.SYNC_SUCCESS)
+                            updateLocalSQLite(localTime,devState,callStateL,DbConstants.SENT)
                         }
                     } catch (e: JSONException){
                         e.printStackTrace()
@@ -426,7 +426,7 @@ class SpaighService() : Service(), SensorEventListener {
 
 
     private fun syncToLocalSQLite(localTime: String, devState: String, callStateL: String,
-                                  syncStatus: Int = DbConstants.SYNC_FAILED){
+                                  syncStatus: Int = DbConstants.UNSENT){
         myScope.launch {
             dataControl.insert(Data(localTime,devState,callStateL,syncStatus))
         }
