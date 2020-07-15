@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity() {
     fun startService(v: View?) {
         getPermission(android.Manifest.permission.READ_PHONE_STATE, 1)
         //Get server URL from user
-        DbConstants.SERVER_URL = server_address.text.toString()
+        DbConstants.SERVER_URL = "http://" + server_address.text.toString()
         //Send an intent to start service
         val serviceIntent = Intent(this, SpaighService::class.java)
         ContextCompat.startForegroundService(this, serviceIntent)
