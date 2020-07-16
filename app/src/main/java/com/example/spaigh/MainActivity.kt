@@ -2,6 +2,7 @@ package com.example.spaigh
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.ConnectivityManager
@@ -14,6 +15,7 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.amitshekhar.sqlite.DBFactory
 import com.android.volley.AuthFailureError
 import com.android.volley.DefaultRetryPolicy
 import com.android.volley.Request
@@ -37,11 +39,19 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        server_address.setHint(DbConstants.SERVER_URL)
+        val sharedPref: SharedPreferences = applicationContext.getSharedPreferences(getString(R.string.shared_pref), Context.MODE_PRIVATE)
+
+        server_address.hint = DbConstants.SERVER_URL
 
         if (serviceRunning){
             service_state.setText(" SERVICE RUNNING")
         }
+
+        //set server address to stored address on startup
+        if(!serviceRunning){
+            server_address.setText(sharedPref.getString(getString(R.string.ip_address),"") )
+        }
+
 
         call_state.setTextColor(Color.BLUE)
         device_state.setTextColor(Color.BLUE)
@@ -98,10 +108,18 @@ class MainActivity : AppCompatActivity() {
     fun startService(v: View?) {
         if (!serviceRunning){
             getPermission(android.Manifest.permission.READ_PHONE_STATE, 1)
-            //Get server URL from user
             val date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM/dd/y"))
             val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+
+            //Get server URL from user
             DbConstants.SERVER_ADDR = server_address.text.toString()
+
+            val sharedPref: SharedPreferences = applicationContext.getSharedPreferences(getString(R.string.shared_pref), Context.MODE_PRIVATE)
+            with(sharedPref.edit()){
+                putString(getString(R.string.ip_address), DbConstants.SERVER_ADDR)
+                commit()
+            }
+
             DbConstants.SERVER_URL = "http://" + server_address.text.toString()
             checkWithServer("$date,$time", "UNDEFINED", "UNDEFINED")
         }
