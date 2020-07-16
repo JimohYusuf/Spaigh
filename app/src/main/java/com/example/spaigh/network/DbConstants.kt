@@ -7,6 +7,7 @@ class DbConstants {
         val SENT = 1
         val UNSENT = 0
         var SERVER_URL = "server address"
+        var SERVER_ADDR = "server address"
     }
 
 }

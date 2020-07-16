@@ -34,10 +34,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONException
 import org.json.JSONObject
 import java.math.RoundingMode
-import java.text.DateFormat
 import java.text.DecimalFormat
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import kotlin.collections.HashMap
 import kotlin.math.abs
 
@@ -45,8 +44,8 @@ import kotlin.math.abs
 val stateTypes: List<String> = listOf("CALL-IDLE", "DEVICE-IDLE", "OFF-HOOK", "RINGING", "DEVICE-MOVING", "CALL-ACTIVE", "OUTGOING-CALL")
 
 var moveState = stateTypes[1]
-var isConnected = "Internet: Unknown"
-var isSynced = "Not Syncing"
+var isConnected = "INTERNET: UNKNOWN"
+var isSynced = "NOT SYNCING"
 var serviceRunning = false
 
 class SpaighService() : Service(), SensorEventListener {
@@ -151,36 +150,38 @@ class SpaighService() : Service(), SensorEventListener {
 
         //Code to run every X seconds
         handler.postDelayed(object : Runnable {
-            @RequiresApi(Build.VERSION_CODES.M)
+            @RequiresApi(Build.VERSION_CODES.O)
             override fun run() {
 
 
                     //sync data in case of lost connections
                     myScope.launch {
                         if (isNetworkAvailable()) {
-                            isConnected = "Internet: Connected"
+                            isConnected = "INTERNET: CONNECTED"
                             val allData = dataControl.getAll()
-                            for (data in allData) {
-                                if (data.syncStatus == DbConstants.UNSENT) {
-                                    syncCheck += 1
-                                    reSyncWithServer(
-                                        data.timeStamp,
-                                        data.phnState.toString(),
-                                        data.callState.toString()
-                                    )
+                            if ((System.currentTimeMillis() % 30000) < 200){
+                                for (data in allData) {
+                                    if (data.syncStatus == DbConstants.UNSENT) {
+                                        syncCheck += 1
+                                        reSyncWithServer(
+                                            data.timeStamp,
+                                            data.phnState.toString(),
+                                            data.callState.toString()
+                                        )
+                                    }
                                 }
                             }
 
                             if (syncCheck != 0){
-                                isSynced = "Syncing data"
+                                isSynced = "SYNCING DATA"
                                 syncCheck = 0
                             }
                             else{
-                                isSynced = "Synced all data"
+                                isSynced = "SYNCED ALL DATA"
                             }
                         } else{
-                            isConnected = "Internet: Not Connected"
-                            isSynced = "Syncing data"
+                            isConnected = "INTERNET: NOT CONNECTED"
+                            isSynced = "SYNCING DATA"
                         }
                     }
 
@@ -214,11 +215,12 @@ class SpaighService() : Service(), SensorEventListener {
                 if( moveState != moveStatePrev || callstate != callstatePrev)
                 {
                     syncWithServer(localTime, moveState, callStateToDb)
+                    println("State Changed: Just after syncing with server")
                     moveStatePrev = moveState
                     callstatePrev = callstate
                 }
 
-                if (!dbCleaned && syncSuccess && (System.currentTimeMillis() % dayInSeconds < 1000) ){
+                if (!dbCleaned && syncSuccess && (System.currentTimeMillis() % dayInSeconds) < 2000 ){
                     myScope.launch {
                         dataControl.deleteAllData()
                     }
@@ -289,7 +291,7 @@ class SpaighService() : Service(), SensorEventListener {
         )
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Spaigh Service")
-            .setContentText("spying")
+            .setContentText("Running... Tap to go to app home.")
             .setSmallIcon(R.drawable.ic_fan)
             .setContentIntent(pendingIntent)
             .build()
@@ -301,11 +303,11 @@ class SpaighService() : Service(), SensorEventListener {
 
 
     //does exactly what it says
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun getLocalTime(): String {
-        val currTime = Calendar.getInstance(TimeZone.getTimeZone("GMT+4:00")).time
-        val date: DateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US)
-        date.timeZone = TimeZone.getTimeZone("GMT+4:00")
-        return date.format(currTime)
+        val date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM/dd/y"))
+        val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+        return "$date,$time"
     }
 
 
@@ -315,7 +317,7 @@ class SpaighService() : Service(), SensorEventListener {
     private fun isNetworkAvailable(): Boolean{
         val connManager = this.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val networkInfo= connManager.activeNetworkInfo
-        return networkInfo?.isConnected() == true
+        return networkInfo?.isConnected == true
     }
 
 
@@ -330,23 +332,23 @@ class SpaighService() : Service(), SensorEventListener {
                 Request.Method.POST, DbConstants.SERVER_URL,
                 Response.Listener { response ->
                     try {
-                        jsonObject = JSONObject(response)
-                        var Response = jsonObject.getString("response")
-
-                        if (Response == "OK"){
+                        if (response == "POST SUCCESS"){
                             syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SENT)
+                            println("POST SUCCESSFUL")
                         }
                         else{
                             syncToLocalSQLite(localTime,devState,callStateL,DbConstants.UNSENT)
+                            println("POST UNSUCCESSFUL")
                         }
-                        println(Response)
+                        println("Response: Inside syncWithServer: $response")
                     } catch (e: JSONException){
                         e.printStackTrace()
                     }
                 },
                 Response.ErrorListener { error ->
-                    // Handle error
-                    syncToLocalSQLite(localTime,devState,callStateL)
+                    println("An Error Occurred: Inside SyncWithServer: Inside Response.ErrorListener")
+                    println("ErrorListener (Inside Sync) Message: " + error.message)
+                    syncToLocalSQLite(localTime,devState,callStateL,DbConstants.UNSENT)
                 }){
 
                 @Throws(AuthFailureError::class)
@@ -358,10 +360,10 @@ class SpaighService() : Service(), SensorEventListener {
                     params["call_state"] = callStateL
                     return params
                 }
-                }
+            }
 
             stringRequest.retryPolicy = DefaultRetryPolicy(
-                2000,
+                1000,
                 DefaultRetryPolicy.DEFAULT_MAX_RETRIES,
                 DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
             )
@@ -370,6 +372,7 @@ class SpaighService() : Service(), SensorEventListener {
             VolleySingleton.getInstance(this).addToRequestQueue(stringRequest)
 
         } else{
+            println("Unfortunately no Internet Connection: Inside syncWithServer")
             syncToLocalSQLite(localTime,devState,callStateL,DbConstants.UNSENT)
         }
 
@@ -386,18 +389,18 @@ class SpaighService() : Service(), SensorEventListener {
                 Request.Method.POST, DbConstants.SERVER_URL,
                 Response.Listener { response ->
                     try {
-                        jsonObject = JSONObject(response)
-                        var Response = jsonObject.getString("response")
-
-                        if (Response == "OK"){
+                        if (response == "POST SUCCESS"){
                             updateLocalSQLite(localTime,devState,callStateL,DbConstants.SENT)
+                            println("Inside reSyncWithServer: On Post Success : and Updating DB")
                         }
                     } catch (e: JSONException){
                         e.printStackTrace()
+                        println(e.message)
                     }
                 },
                 Response.ErrorListener {
-                    //do nothing
+                    println("An Error Occurred: Inside reSyncWithServer: Inside Response.ErrorListener")
+                    println("ErrorListener (Inside Re-sync) Message: " + it.message)
                 }){
 
                 @Throws(AuthFailureError::class)
@@ -429,6 +432,7 @@ class SpaighService() : Service(), SensorEventListener {
                                   syncStatus: Int = DbConstants.UNSENT){
         myScope.launch {
             dataControl.insert(Data(localTime,devState,callStateL,syncStatus))
+            println("Inserted into Local DB")
         }
     }
 
@@ -437,6 +441,7 @@ class SpaighService() : Service(), SensorEventListener {
                                   syncStatus: Int){
         myScope.launch {
             dataControl.update(Data(localTime,devState,callStateL,syncStatus))
+            println("Updated Local DB")
         }
     }
 
@@ -467,9 +472,9 @@ class SpaighService() : Service(), SensorEventListener {
         //Return to default states on stop service
         callStateToDb = "CALL-IDLE"
         moveState = "DEVICE-IDLE"
-        isConnected = "Internet: Unknown"
-        isSynced = "Not Syncing"
-        serverConnection = "Disconnected from " + DbConstants.SERVER_URL
+        isConnected = "INTERNET: UNKNOWN"
+        isSynced = "NOT SYNCING"
+        //serverConnection = "Disconnected from " + DbConstants.SERVER_URL
         serviceRunning = false
         sensorManager.unregisterListener(this)
         handler.removeCallbacksAndMessages(null)

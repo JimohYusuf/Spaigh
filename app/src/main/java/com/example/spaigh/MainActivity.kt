@@ -1,8 +1,10 @@
 package com.example.spaigh
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.ConnectivityManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -12,8 +14,17 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.android.volley.AuthFailureError
+import com.android.volley.DefaultRetryPolicy
+import com.android.volley.Request
+import com.android.volley.Response
+import com.android.volley.toolbox.StringRequest
 import com.example.spaigh.network.DbConstants
+import com.example.spaigh.network.VolleySingleton
 import kotlinx.android.synthetic.main.activity_main.*
+import org.json.JSONException
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 var serverConnection = "server address"
 
@@ -29,7 +40,7 @@ class MainActivity : AppCompatActivity() {
         server_address.setHint(DbConstants.SERVER_URL)
 
         if (serviceRunning){
-            service_state.setText(" Service is Running")
+            service_state.setText(" SERVICE RUNNING")
         }
 
         call_state.setTextColor(Color.BLUE)
@@ -58,22 +69,22 @@ class MainActivity : AppCompatActivity() {
                 }
                 else{device_state.setTextColor(Color.BLUE)}
 
-                if(connection.text == "Internet: Not Connected"){
+                if(connection.text == "INTERNET: NOT CONNECTED"){
                     connection.setTextColor(Color.RED)
                 }
                 else{connection.setTextColor(Color.BLUE)}
 
-                if(sync_state.text == "Syncing data"){
+                if(sync_state.text == "SYNCING DATA"){
                     sync_state.setTextColor(Color.RED)
                 }
                 else{sync_state.setTextColor(Color.BLUE)}
 
-                if (isConnected != "Internet: Connected"){
+                if (isConnected != "INTERNET: CONNECTED"){
                     server_address.hint = serverConnection
                 }
 
-                if(isConnected == "Internet: Connected" && serviceRunning){
-                    server_address.setHint("Connected to " + DbConstants.SERVER_URL)
+                if(isConnected == "INTERNET: CONNECTED" && serviceRunning){
+                    server_address.hint = "Connected to " + DbConstants.SERVER_URL
                 }
 
                 handler.postDelayed(this, delay)
@@ -81,29 +92,32 @@ class MainActivity : AppCompatActivity() {
         }, delay)
     }
 
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////
     /*Initiates service on click of a button*/
+    @RequiresApi(Build.VERSION_CODES.O)
     fun startService(v: View?) {
-        getPermission(android.Manifest.permission.READ_PHONE_STATE, 1)
-        //Get server URL from user
-        DbConstants.SERVER_URL = "http://" + server_address.text.toString()
-        //Send an intent to start service
-        val serviceIntent = Intent(this, SpaighService::class.java)
-        ContextCompat.startForegroundService(this, serviceIntent)
-        service_state.setText(" Service is Running")
-        server_address.setText("")
-        server_address.hint = "Connected to " + DbConstants.SERVER_URL
+        if (!serviceRunning){
+            getPermission(android.Manifest.permission.READ_PHONE_STATE, 1)
+            //Get server URL from user
+            val date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM/dd/y"))
+            val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+            DbConstants.SERVER_ADDR = server_address.text.toString()
+            DbConstants.SERVER_URL = "http://" + server_address.text.toString()
+            checkWithServer("$date,$time", "UNDEFINED", "UNDEFINED")
+        }
+
     }
 
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////
     /*Stops service on click of a button*/
     fun stopService(v: View?) {
         val serviceIntent = Intent(this, SpaighService::class.java)
         stopService(serviceIntent)
-        service_state.setText(" Service Stopped")
+        service_state.text = " SERVICE STOPPED"
+        server_address.setText(DbConstants.SERVER_ADDR)
     }
 
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////
     /*Runtime permission request*/
     private fun getPermission(permission: String, requestCode: Int) {
 
@@ -116,7 +130,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /*Handle request response*/
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    /*Handle permission request response*/
     override fun onRequestPermissionsResult(requestCode: Int,
                                             permissions: Array<String>,
                                             grantResults: IntArray) {
@@ -137,18 +152,86 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
     override fun onResume() {
         super.onResume()
     }
 
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////
     override fun onPause() {
         super.onPause()
     }
 
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun isNetworkAvailable(): Boolean{
+        val connManager = this.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networkInfo= connManager.activeNetworkInfo
+        return networkInfo?.isConnected == true
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun checkWithServer(localTime: String, devState: String, callStateL: String){
+        if (isNetworkAvailable()){
+
+            // Formulate POST request and handle response.
+            var stringRequest = object: StringRequest(
+                Request.Method.POST, DbConstants.SERVER_URL,
+                Response.Listener { response ->
+                    try {
+                        if (response == "POST SUCCESS"){
+                            //Send an intent to start service
+                            val serviceIntent = Intent(this, SpaighService::class.java)
+                            ContextCompat.startForegroundService(this, serviceIntent)
+                            service_state.text = " SERVICE IS RUNNING"
+                            server_address.setText("")
+                            server_address.hint = "Connected to " + DbConstants.SERVER_URL
+                        }
+                        else{
+                            Toast.makeText(this, "Could not Connect. Check entered server address and Check if server is running.", Toast.LENGTH_LONG).show()
+                        }
+
+                    } catch (e: JSONException){
+                        e.printStackTrace()
+                        Toast.makeText(this, "Could not Connect. Check entered server address and Check if server is running.", Toast.LENGTH_LONG).show()
+                    }
+                },
+                Response.ErrorListener {
+                    Toast.makeText(this, "Could not Connect. Check entered server address and Check if server is running.", Toast.LENGTH_LONG).show()
+                }){
+
+                @Throws(AuthFailureError::class)
+                override fun getParams(): Map<String, String> {
+                    val params: MutableMap<String, String> = HashMap()
+                    //Change with your post params
+                    params["time_stamp"] = localTime
+                    params["device_state"] = devState
+                    params["call_state"] = callStateL
+                    return params
+                }
+            }
+
+            stringRequest.retryPolicy = DefaultRetryPolicy(
+                1000,
+                DefaultRetryPolicy.DEFAULT_MAX_RETRIES,
+                DefaultRetryPolicy.DEFAULT_BACKOFF_MULT
+            )
+
+            // Add the request to the RequestQueue.
+            VolleySingleton.getInstance(this).addToRequestQueue(stringRequest)
+
+        } else{
+            Toast.makeText(this, "No Active Internet Connection", Toast.LENGTH_LONG).show()
+        }
+
     }
 }
