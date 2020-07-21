@@ -48,12 +48,12 @@ var isConnected = "INTERNET: UNKNOWN"
 var isSynced = "NOT SYNCING"
 var serviceRunning = false
 
+//parameter controls sensitivity of app to phone movement
+var moveThreshold: Float = 0.01F
+
 class SpaighService() : Service(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private lateinit var manager: PackageManager
-
-    //parameter controls sensitivity of app to phone movement
-    private val moveThreshold: Float = 0.01F
 
     //acquire gravity and linear acceleration sensors
     private var sGrav: Sensor? = null

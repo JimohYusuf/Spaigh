@@ -9,4 +9,9 @@
     <string name="ip_address">ip_address</string>
     <string name="shared_pref">shared_pref</string>
     <string name="server_addr">server address</string>
+    <string-array name="sensitivity">
+        <item>Very Sensitive</item>
+        <item>Normal</item>
+        <item>Less Sensitive</item>
+    </string-array>
 </resources>

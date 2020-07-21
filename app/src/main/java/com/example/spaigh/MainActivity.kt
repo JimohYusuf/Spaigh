@@ -10,6 +10,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
@@ -29,7 +32,7 @@ import java.time.format.DateTimeFormatter
 
 var serverConnection = "server address"
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
     private val handler = Handler()
     private val delay = 100L
 
@@ -38,17 +41,35 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val sharedPref: SharedPreferences = applicationContext.getSharedPreferences(getString(R.string.shared_pref), Context.MODE_PRIVATE)
+        val spinner: Spinner = findViewById(R.id.sensitivity)
+        // Create an ArrayAdapter using the string array and a default spinner layout
+        ArrayAdapter.createFromResource(
+            this,
+            R.array.sensitivity,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            // Specify the layout to use when the list of choices appears
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            // Apply the adapter to the spinner
+            spinner.adapter = adapter
+        }
+
+        spinner.onItemSelectedListener = this
+
+        val sharedPref: SharedPreferences = applicationContext.getSharedPreferences(
+            getString(R.string.shared_pref),
+            Context.MODE_PRIVATE
+        )
 
         server_address.hint = DbConstants.SERVER_URL
 
-        if (serviceRunning){
+        if (serviceRunning) {
             service_state.setText(" SERVICE RUNNING")
         }
 
         //set server address to stored address on startup
-        if(!serviceRunning){
-            server_address.setText(sharedPref.getString(getString(R.string.ip_address),"") )
+        if (!serviceRunning) {
+            server_address.setText(sharedPref.getString(getString(R.string.ip_address), ""))
         }
 
 
@@ -65,34 +86,37 @@ class MainActivity : AppCompatActivity() {
                 connection.text = isConnected
                 sync_state.text = isSynced
 
-                if(call_state.text == "CALL-IDLE"){
+                if (call_state.text == "CALL-IDLE") {
                     call_state.setTextColor(Color.BLUE)
-                }
-                else if (call_state.text == "RINGING"){
+                } else if (call_state.text == "RINGING") {
                     call_state.setTextColor(Color.RED)
+                } else {
+                    call_state.setTextColor(Color.GREEN)
                 }
-                else{call_state.setTextColor(Color.GREEN)}
 
-                if(device_state.text == "DEVICE-MOVING"){
+                if (device_state.text == "DEVICE-MOVING") {
                     device_state.setTextColor(Color.RED)
+                } else {
+                    device_state.setTextColor(Color.BLUE)
                 }
-                else{device_state.setTextColor(Color.BLUE)}
 
-                if(connection.text == "INTERNET: NOT CONNECTED"){
+                if (connection.text == "INTERNET: NOT CONNECTED") {
                     connection.setTextColor(Color.RED)
+                } else {
+                    connection.setTextColor(Color.BLUE)
                 }
-                else{connection.setTextColor(Color.BLUE)}
 
-                if(sync_state.text == "SYNCING DATA"){
+                if (sync_state.text == "SYNCING DATA") {
                     sync_state.setTextColor(Color.RED)
+                } else {
+                    sync_state.setTextColor(Color.BLUE)
                 }
-                else{sync_state.setTextColor(Color.BLUE)}
 
-                if (isConnected != "INTERNET: CONNECTED"){
+                if (isConnected != "INTERNET: CONNECTED") {
                     server_address.hint = serverConnection
                 }
 
-                if(isConnected == "INTERNET: CONNECTED" && serviceRunning){
+                if (isConnected == "INTERNET: CONNECTED" && serviceRunning) {
                     server_address.hint = "Connected to " + DbConstants.SERVER_URL
                 }
 
@@ -105,7 +129,7 @@ class MainActivity : AppCompatActivity() {
     /*Initiates service on click of a button*/
     @RequiresApi(Build.VERSION_CODES.O)
     fun startService(v: View?) {
-        if (!serviceRunning){
+        if (!serviceRunning) {
             getPermission(android.Manifest.permission.READ_PHONE_STATE, 1)
             val date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM/dd/y"))
             val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
@@ -113,8 +137,11 @@ class MainActivity : AppCompatActivity() {
             //Get server URL from user
             DbConstants.SERVER_ADDR = server_address.text.toString()
 
-            val sharedPref: SharedPreferences = applicationContext.getSharedPreferences(getString(R.string.shared_pref), Context.MODE_PRIVATE)
-            with(sharedPref.edit()){
+            val sharedPref: SharedPreferences = applicationContext.getSharedPreferences(
+                getString(R.string.shared_pref),
+                Context.MODE_PRIVATE
+            )
+            with(sharedPref.edit()) {
                 putString(getString(R.string.ip_address), DbConstants.SERVER_ADDR)
                 commit()
             }
@@ -140,26 +167,33 @@ class MainActivity : AppCompatActivity() {
 
         // Checking if permission is not granted
         if (ContextCompat.checkSelfPermission(this, permission)
-                                                    == PackageManager.PERMISSION_DENIED) {
-            ActivityCompat.requestPermissions(this,
-                                                arrayOf(permission),
-                                                requestCode)
+            == PackageManager.PERMISSION_DENIED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(permission),
+                requestCode
+            )
         }
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     /*Handle permission request response*/
-    override fun onRequestPermissionsResult(requestCode: Int,
-                                            permissions: Array<String>,
-                                            grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
         when (requestCode) {
             1 -> {
                 // If request is cancelled, the result arrays are empty.
                 if ((grantResults.isNotEmpty() &&
-                            grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                            grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                ) {
                     //do nothing
                 } else {
-                   Toast.makeText(this, "Phone monitoring function disabled", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "Phone monitoring function disabled", Toast.LENGTH_LONG)
+                        .show()
                 }
                 return
             }
@@ -188,43 +222,54 @@ class MainActivity : AppCompatActivity() {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     @RequiresApi(Build.VERSION_CODES.M)
-    private fun isNetworkAvailable(): Boolean{
+    private fun isNetworkAvailable(): Boolean {
         val connManager = this.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val networkInfo= connManager.activeNetworkInfo
+        val networkInfo = connManager.activeNetworkInfo
         return networkInfo?.isConnected == true
     }
 
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     @RequiresApi(Build.VERSION_CODES.M)
-    fun checkWithServer(localTime: String, devState: String, callStateL: String){
-        if (isNetworkAvailable()){
+    fun checkWithServer(localTime: String, devState: String, callStateL: String) {
+        if (isNetworkAvailable()) {
 
             // Formulate POST request and handle response.
-            var stringRequest = object: StringRequest(
+            var stringRequest = object : StringRequest(
                 Request.Method.POST, DbConstants.SERVER_URL,
                 Response.Listener { response ->
                     try {
-                        if (response == "POST SUCCESS"){
+                        if (response == "POST SUCCESS") {
                             //Send an intent to start service
                             val serviceIntent = Intent(this, SpaighService::class.java)
                             ContextCompat.startForegroundService(this, serviceIntent)
                             service_state.text = " SERVICE IS RUNNING"
                             server_address.setText("")
                             server_address.hint = "Connected to " + DbConstants.SERVER_URL
-                        }
-                        else{
-                            Toast.makeText(this, "Could not Connect. Check entered server address and Check if server is running.", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(
+                                this,
+                                "Could not Connect. Check entered server address and Check if server is running.",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
 
-                    } catch (e: JSONException){
+                    } catch (e: JSONException) {
                         e.printStackTrace()
-                        Toast.makeText(this, "Could not Connect. Check entered server address and Check if server is running.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this,
+                            "Could not Connect. Check entered server address and Check if server is running.",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 },
                 Response.ErrorListener {
-                    Toast.makeText(this, "Could not Connect. Check entered server address and Check if server is running.", Toast.LENGTH_LONG).show()
-                }){
+                    Toast.makeText(
+                        this,
+                        "Could not Connect. Check entered server address and Check if server is running.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }) {
 
                 @Throws(AuthFailureError::class)
                 override fun getParams(): Map<String, String> {
@@ -246,9 +291,25 @@ class MainActivity : AppCompatActivity() {
             // Add the request to the RequestQueue.
             VolleySingleton.getInstance(this).addToRequestQueue(stringRequest)
 
-        } else{
+        } else {
             Toast.makeText(this, "No Active Internet Connection", Toast.LENGTH_LONG).show()
         }
 
+    }
+
+    override fun onNothingSelected(parent: AdapterView<*>?) {
+        moveThreshold = 0.01F
+    }
+
+    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+        moveThreshold = when (position) {
+            0 -> 0.005F
+            1 -> 0.01F
+            2 -> 0.1F
+            else -> 0.01F
+        }
+        if (parent != null) {
+            Toast.makeText(this, "Sensitivity: ${parent.selectedItem.toString()}", Toast.LENGTH_LONG).show()
+        }
     }
 }
