@@ -41,7 +41,15 @@ import kotlin.collections.HashMap
 import kotlin.math.abs
 
 //all possible device/call states
-val stateTypes: List<String> = listOf("CALL-IDLE", "DEVICE-IDLE", "OFF-HOOK", "RINGING", "DEVICE-MOVING", "CALL-ACTIVE", "OUTGOING-CALL")
+val stateTypes: List<String> = listOf(
+    "CALL-IDLE",
+    "DEVICE-IDLE",
+    "OFF-HOOK",
+    "RINGING",
+    "DEVICE-MOVING",
+    "CALL-ACTIVE",
+    "OUTGOING-CALL"
+)
 
 var moveState = stateTypes[1]
 var isConnected = "INTERNET: UNKNOWN"
@@ -128,7 +136,11 @@ class SpaighService() : Service(), SensorEventListener {
         if (sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY) != null) {
             sGrav = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
         } else {
-            Toast.makeText(this, "No gravity sensor found. Motion detection disabled", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                "No gravity sensor found. Motion detection disabled",
+                Toast.LENGTH_LONG
+            ).show()
         }
 
         if (sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) != null) {
@@ -154,79 +166,74 @@ class SpaighService() : Service(), SensorEventListener {
             override fun run() {
 
 
-                    //sync data in case of lost connections
-                    myScope.launch {
-                        if (isNetworkAvailable()) {
-                            isConnected = "INTERNET: CONNECTED"
-                            val allData = dataControl.getAll()
-                            if ((System.currentTimeMillis() % 30000) < 200){
-                                for (data in allData) {
-                                    if (data.syncStatus == DbConstants.UNSENT) {
-                                        syncCheck += 1
-                                        reSyncWithServer(
-                                            data.timeStamp,
-                                            data.phnState.toString(),
-                                            data.callState.toString()
-                                        )
-                                    }
+                //sync data in case of lost connections
+                myScope.launch {
+                    if (isNetworkAvailable()) {
+                        isConnected = "INTERNET: CONNECTED"
+                        val allData = dataControl.getAll()
+                        if ((System.currentTimeMillis() % 30000) < 200) {
+                            for (data in allData) {
+                                if (data.syncStatus == DbConstants.UNSENT) {
+                                    syncCheck += 1
+                                    reSyncWithServer(
+                                        data.timeStamp,
+                                        data.phnState.toString(),
+                                        data.callState.toString()
+                                    )
                                 }
                             }
-
-                            if (syncCheck != 0){
-                                isSynced = "SYNCING DATA"
-                                syncCheck = 0
-                            }
-                            else{
-                                isSynced = "SYNCED ALL DATA"
-                            }
-                        } else{
-                            isConnected = "INTERNET: NOT CONNECTED"
-                            isSynced = "SYNCING DATA"
                         }
+
+                        if (syncCheck != 0) {
+                            isSynced = "SYNCING DATA"
+                            syncCheck = 0
+                        } else {
+                            isSynced = "SYNCED ALL DATA"
+                        }
+                    } else {
+                        isConnected = "INTERNET: NOT CONNECTED"
+                        isSynced = "SYNCING DATA"
                     }
+                }
 
                 intervalStop = System.currentTimeMillis()
                 localTime = getLocalTime()
 
                 //Check For Device Motion
-                if (gravChanged && linAccelChanged){
+                if (gravChanged && linAccelChanged) {
                     moveState = stateTypes[4]
                     intervalStart = System.currentTimeMillis()
                 }
-                if( moveState == stateTypes[4] && (intervalStop - intervalStart) >= waitTime){
-                    if(!gravChanged && !linAccelChanged){
+                if (moveState == stateTypes[4] && (intervalStop - intervalStart) >= waitTime) {
+                    if (!gravChanged && !linAccelChanged) {
                         moveState = stateTypes[1]
                     }
                 }
 
                 // Finite State Machine For Call States
-                if (callstatePrev == stateTypes[0] && callstate == stateTypes[2]){
+                if (callstatePrev == stateTypes[0] && callstate == stateTypes[2]) {
                     callStateToDb = stateTypes[6]
-                }
-                else if(callstatePrev == stateTypes[3] && callstate == stateTypes[2]){
+                } else if (callstatePrev == stateTypes[3] && callstate == stateTypes[2]) {
                     callStateToDb = stateTypes[5]
-                }
-                else{
+                } else {
                     callStateToDb = callstate
                 }
 
 
                 //Check For Change In Device/Call Data And Write To Database
-                if( moveState != moveStatePrev || callstate != callstatePrev)
-                {
+                if (moveState != moveStatePrev || callstate != callstatePrev) {
                     syncWithServer(localTime, moveState, callStateToDb)
                     println("State Changed: Just after syncing with server")
                     moveStatePrev = moveState
                     callstatePrev = callstate
                 }
 
-                if (!dbCleaned && syncSuccess && (System.currentTimeMillis() % dayInSeconds) < 2000 ){
+                if (!dbCleaned && syncSuccess && (System.currentTimeMillis() % dayInSeconds) < 2000) {
                     myScope.launch {
                         dataControl.deleteAllData()
                     }
                     dbCleaned = true
-                }
-                else{
+                } else {
                     dbCleaned = false
                 }
 
@@ -238,9 +245,7 @@ class SpaighService() : Service(), SensorEventListener {
     }
 
 
-
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
-
 
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -248,10 +253,10 @@ class SpaighService() : Service(), SensorEventListener {
             for ((counter, value) in event.values.withIndex()) {
                 gravData[counter] = value
             }
-            for ((counter, value) in gravData.withIndex()){
+            for ((counter, value) in gravData.withIndex()) {
                 gravDataDelta[counter] = abs(gravData[counter] - gravDataTemp[counter])
             }
-            for ((count, value) in gravData.withIndex()){
+            for ((count, value) in gravData.withIndex()) {
                 gravDataTemp[count] = gravData[count]
             }
         }
@@ -259,29 +264,35 @@ class SpaighService() : Service(), SensorEventListener {
             for ((counter, value) in event.values.withIndex()) {
                 linAccelData[counter] = value
             }
-            for ((counter, value) in linAccelData.withIndex()){
+            for ((counter, value) in linAccelData.withIndex()) {
                 linAccelDataDelta[counter] = abs(linAccelData[counter] - linAccelDataTemp[counter])
             }
-            for ((count, value) in linAccelData.withIndex()){
+            for ((count, value) in linAccelData.withIndex()) {
                 linAccelDataTemp[count] = linAccelData[count]
             }
         }
 
         //check for motion
-        gravChanged = (abs(gravDataDelta[0]) > moveThreshold || abs(gravDataDelta[1]) > moveThreshold || abs(gravDataDelta[2]) > moveThreshold)
-        linAccelChanged =  (abs(linAccelDataDelta[0]) > moveThreshold || abs(linAccelDataDelta[1]) > moveThreshold || abs(linAccelDataDelta[2]) > moveThreshold)
+        gravChanged =
+            (abs(gravDataDelta[0]) > moveThreshold || abs(gravDataDelta[1]) > moveThreshold || abs(
+                gravDataDelta[2]
+            ) > moveThreshold)
+        linAccelChanged =
+            (abs(linAccelDataDelta[0]) > moveThreshold || abs(linAccelDataDelta[1]) > moveThreshold || abs(
+                linAccelDataDelta[2]
+            ) > moveThreshold)
 
     }
 
 
-
-    override fun onBind(intent: Intent?): IBinder? { return null }
-
+    override fun onBind(intent: Intent?): IBinder? {
+        return null
+    }
 
 
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
 
-        Toast.makeText(this, "service started", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Service started", Toast.LENGTH_LONG).show()
 
         //Foreground service notification build
         val notificationIntent = Intent(this, MainActivity::class.java)
@@ -311,45 +322,42 @@ class SpaighService() : Service(), SensorEventListener {
     }
 
 
-
     //this function checks whether the device is on a network
     @RequiresApi(Build.VERSION_CODES.M)
-    private fun isNetworkAvailable(): Boolean{
+    private fun isNetworkAvailable(): Boolean {
         val connManager = this.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val networkInfo= connManager.activeNetworkInfo
+        val networkInfo = connManager.activeNetworkInfo
         return networkInfo?.isConnected == true
     }
 
 
-
     //this function syncs the device's database data to server
     @RequiresApi(Build.VERSION_CODES.M)
-    fun syncWithServer(localTime: String, devState: String, callStateL: String){
-        if (isNetworkAvailable()){
+    fun syncWithServer(localTime: String, devState: String, callStateL: String) {
+        if (isNetworkAvailable()) {
 
             // Formulate POST request and handle response.
-            var stringRequest = object: StringRequest(
+            var stringRequest = object : StringRequest(
                 Request.Method.POST, DbConstants.SERVER_URL,
                 Response.Listener { response ->
                     try {
-                        if (response == "POST SUCCESS"){
-                            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.SENT)
+                        if (response == "POST SUCCESS") {
+                            syncToLocalSQLite(localTime, devState, callStateL, DbConstants.SENT)
                             println("POST SUCCESSFUL")
-                        }
-                        else{
-                            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.UNSENT)
+                        } else {
+                            syncToLocalSQLite(localTime, devState, callStateL, DbConstants.UNSENT)
                             println("POST UNSUCCESSFUL")
                         }
                         println("Response: Inside syncWithServer: $response")
-                    } catch (e: JSONException){
+                    } catch (e: JSONException) {
                         e.printStackTrace()
                     }
                 },
                 Response.ErrorListener { error ->
                     println("An Error Occurred: Inside SyncWithServer: Inside Response.ErrorListener")
                     println("ErrorListener (Inside Sync) Message: " + error.message)
-                    syncToLocalSQLite(localTime,devState,callStateL,DbConstants.UNSENT)
-                }){
+                    syncToLocalSQLite(localTime, devState, callStateL, DbConstants.UNSENT)
+                }) {
 
                 @Throws(AuthFailureError::class)
                 override fun getParams(): Map<String, String> {
@@ -371,29 +379,28 @@ class SpaighService() : Service(), SensorEventListener {
             // Add the request to the RequestQueue.
             VolleySingleton.getInstance(this).addToRequestQueue(stringRequest)
 
-        } else{
+        } else {
             println("Unfortunately no Internet Connection: Inside syncWithServer")
-            syncToLocalSQLite(localTime,devState,callStateL,DbConstants.UNSENT)
+            syncToLocalSQLite(localTime, devState, callStateL, DbConstants.UNSENT)
         }
 
     }
 
 
-
     @RequiresApi(Build.VERSION_CODES.M)
-    fun reSyncWithServer(localTime: String, devState: String, callStateL: String){
-        if (isNetworkAvailable()){
+    fun reSyncWithServer(localTime: String, devState: String, callStateL: String) {
+        if (isNetworkAvailable()) {
 
             // Formulate POST request and handle response.
-            var stringRequest = object: StringRequest(
+            var stringRequest = object : StringRequest(
                 Request.Method.POST, DbConstants.SERVER_URL,
                 Response.Listener { response ->
                     try {
-                        if (response == "POST SUCCESS"){
-                            updateLocalSQLite(localTime,devState,callStateL,DbConstants.SENT)
+                        if (response == "POST SUCCESS") {
+                            updateLocalSQLite(localTime, devState, callStateL, DbConstants.SENT)
                             println("Inside reSyncWithServer: On Post Success : and Updating DB")
                         }
-                    } catch (e: JSONException){
+                    } catch (e: JSONException) {
                         e.printStackTrace()
                         println(e.message)
                     }
@@ -401,7 +408,7 @@ class SpaighService() : Service(), SensorEventListener {
                 Response.ErrorListener {
                     println("An Error Occurred: Inside reSyncWithServer: Inside Response.ErrorListener")
                     println("ErrorListener (Inside Re-sync) Message: " + it.message)
-                }){
+                }) {
 
                 @Throws(AuthFailureError::class)
                 override fun getParams(): Map<String, String> {
@@ -427,40 +434,46 @@ class SpaighService() : Service(), SensorEventListener {
     }
 
 
-
-    private fun syncToLocalSQLite(localTime: String, devState: String, callStateL: String,
-                                  syncStatus: Int = DbConstants.UNSENT){
+    private fun syncToLocalSQLite(
+        localTime: String, devState: String, callStateL: String,
+        syncStatus: Int = DbConstants.UNSENT
+    ) {
         myScope.launch {
-            dataControl.insert(Data(localTime,devState,callStateL,syncStatus))
+            dataControl.insert(Data(localTime, devState, callStateL, syncStatus))
             println("Inserted into Local DB")
         }
     }
 
 
-    private fun updateLocalSQLite(localTime: String, devState: String, callStateL: String,
-                                  syncStatus: Int){
+    private fun updateLocalSQLite(
+        localTime: String, devState: String, callStateL: String,
+        syncStatus: Int
+    ) {
         myScope.launch {
-            dataControl.update(Data(localTime,devState,callStateL,syncStatus))
+            dataControl.update(Data(localTime, devState, callStateL, syncStatus))
             println("Updated Local DB")
         }
     }
 
 
-    private fun printData (sensorData: FloatArray) {
+    private fun printData(sensorData: FloatArray) {
         var temp = 0.0F
         val df = DecimalFormat("#.###")
         df.roundingMode = RoundingMode.CEILING
 
         canPrint =
-            !(abs(sensorData[0]) < moveThreshold && abs(sensorData[1]) < moveThreshold && abs(sensorData[2]) < moveThreshold)
+            !(abs(sensorData[0]) < moveThreshold && abs(sensorData[1]) < moveThreshold && abs(
+                sensorData[2]
+            ) < moveThreshold)
 
         if (canPrint) {
             for ((counter, value) in sensorData.withIndex()) {
-                if(abs(value) > moveThreshold) {
+                if (abs(value) > moveThreshold) {
                     temp = df.format(value).toFloat()
                     print("Axis ${axis[counter]} = $temp")
+                } else {
+                    print("Axis ${axis[counter]} = 0 ")
                 }
-                else{ print("Axis ${axis[counter]} = 0 ") }
             }
             println()
         }

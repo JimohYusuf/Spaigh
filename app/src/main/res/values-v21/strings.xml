@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="website_address">website_address</string>
+    <string name="stream_address">stream_address</string>
+</resources>

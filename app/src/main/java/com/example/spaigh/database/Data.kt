@@ -5,7 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 @Entity
-data class Data (
+data class Data(
     @PrimaryKey val timeStamp: String,
     //device current state: moving or idle
     @ColumnInfo(name = "DeviceState") val phnState: String?,

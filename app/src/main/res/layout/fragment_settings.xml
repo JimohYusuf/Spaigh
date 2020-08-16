@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+
+    <TextView
+        android:id="@+id/sensitivity_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/colorPrimary"
+        android:textSize="16sp"
+        android:text="SELECT SENSITIVITY LEVEL"
+        android:layout_marginBottom="10dp" />
+    <Spinner
+        android:id="@+id/sensitivity"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginBottom="35dp"/>
+
+    <TextView
+        android:id="@+id/website_address_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/colorPrimary"
+        android:textSize="16sp"
+        android:text="ENTER WEBSITE HOME ADDRESS" />
+
+    <EditText
+        android:id="@+id/website_address"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint=""
+        android:inputType= "text"
+        android:textSize="14sp"
+        android:layout_marginBottom="35dp"/>
+
+    <TextView
+        android:id="@+id/stream_address_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/colorPrimary"
+        android:textSize="16sp"
+        android:text="ENTER STREAM RTSP ADDRESS" />
+
+    <EditText
+        android:id="@+id/stream_address"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint=""
+        android:inputType= "text"
+        android:textSize="14sp"
+        android:layout_marginBottom="35dp"/>
+
+    <Button
+        android:id="@+id/save_settings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SAVE SETTINGS"
+        />
+
+</LinearLayout>
